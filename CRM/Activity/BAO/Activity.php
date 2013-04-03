@@ -410,13 +410,13 @@ class CRM_Activity_BAO_Activity extends CRM_Activity_DAO_Activity {
         $values = array();
         foreach ($params['assignee_contact_id'] as $acID) {
           if ($acID) {
-            $values[] = "( $activityId, $acID )";
+            $values[] = "( $activityId, $acID, 'Assignee' )";
           }
         }
         while (!empty($values)) {
           $input = array_splice($values, 0, CRM_Core_DAO::BULK_INSERT_COUNT);
           $str   = implode(',', $input);
-          $sql   = "INSERT IGNORE INTO civicrm_activity_assignment ( activity_id, assignee_contact_id ) VALUES $str;";
+          $sql   = "INSERT IGNORE INTO civicrm_activity_contact ( activity_id, contact_id, record_type ) VALUES $str;";
           CRM_Core_DAO::executeQuery($sql);
         }
       }
@@ -464,14 +464,14 @@ class CRM_Activity_BAO_Activity extends CRM_Activity_DAO_Activity {
         $values = array();
         foreach ($params['target_contact_id'] as $tid) {
           if ($tid) {
-            $values[] = "( $activityId, $tid )";
+            $values[] = "( $activityId, $tid, 'Target' )";
           }
         }
 
         while (!empty($values)) {
           $input = array_splice($values, 0, CRM_Core_DAO::BULK_INSERT_COUNT);
           $str   = implode(',', $input);
-          $sql   = "INSERT IGNORE INTO civicrm_activity_target ( activity_id, target_contact_id ) VALUES $str;";
+          $sql   = "INSERT IGNORE INTO civicrm_activity_contact ( activity_id, contact_id, record_type ) VALUES $str;";
           CRM_Core_DAO::executeQuery($sql);
         }
       }
@@ -743,12 +743,13 @@ class CRM_Activity_BAO_Activity extends CRM_Activity_DAO_Activity {
     }
 
     if (empty($order)) {
-      $order = (CRM_Utils_Array::value('context', $input) == 'activity') ? " ORDER BY tbl.activity_date_time desc " : " ORDER BY tbl.status_id asc, tbl.activity_date_time asc ";
+      $order =
+        (CRM_Utils_Array::value('context', $input) == 'activity') ?
+        " ORDER BY tbl.activity_date_time desc " :
+        " ORDER BY tbl.status_id asc, tbl.activity_date_time asc ";
     }
 
-    if (!empty($input['rowCount']) &&
-      $input['rowCount'] > 0
-    ) {
+    if (!empty($input['rowCount']) && $input['rowCount'] > 0) {
       $limit = " LIMIT {$input['offset']}, {$input['rowCount']} ";
     }
 
@@ -779,44 +780,46 @@ LEFT JOIN  civicrm_case_activity ON ( civicrm_case_activity.activity_id = tbl.ac
     // step 2: Get target and assignee contacts for above activities
     // create temp table for target contacts
     $activityTargetContactTempTable = "civicrm_temp_target_contact_{$randomNum}";
-    $query = "CREATE TEMPORARY TABLE {$activityTargetContactTempTable} (
-                activity_id int unsigned, target_contact_id int unsigned, target_contact_name varchar(255) )
-                ENGINE=MYISAM DEFAULT CHARACTER SET utf8 COLLATE utf8_unicode_ci";
-
+    $query = "
+CREATE TEMPORARY TABLE {$activityTargetContactTempTable} (
+  activity_id int unsigned,
+  target_contact_id int unsigned,
+  target_contact_name varchar(255)
+) ENGINE=MYISAM DEFAULT CHARACTER SET utf8 COLLATE utf8_unicode_ci
+";
     CRM_Core_DAO::executeQuery($query);
 
     // note that we ignore bulk email for targets, since we don't show it in selector
-    $query = "INSERT INTO {$activityTargetContactTempTable} ( activity_id, target_contact_id, target_contact_name )
-                  SELECT at.activity_id,
-                  at.target_contact_id ,
-                  c.sort_name
-                  FROM civicrm_activity_target at
-                  INNER JOIN {$activityTempTable} ON ( at.activity_id = {$activityTempTable}.activity_id
-                             {$notbulkActivityClause} )
-                  INNER JOIN civicrm_contact c ON c.id = at.target_contact_id
-                  WHERE c.is_deleted = 0";
-
+    $query = "
+INSERT INTO {$activityTargetContactTempTable} ( activity_id, target_contact_id, target_contact_name )
+      SELECT at.activity_id, at.contact_id, c.sort_name
+        FROM civicrm_activity_contact at
+  INNER JOIN {$activityTempTable} ON *at.activity_id = {$activityTempTable}.activity_id AND at.record_type = 'Target')
+  INNER JOIN civicrm_contact c ON c.id = at.target_contact_id
+       WHERE c.is_deleted = 0 AND {$notbulkActivityClause}
+";
     CRM_Core_DAO::executeQuery($query);
 
     // create temp table for assignee contacts
     $activityAssigneetContactTempTable = "civicrm_temp_assignee_contact_{$randomNum}";
-    $query = "CREATE TEMPORARY TABLE {$activityAssigneetContactTempTable} (
-                activity_id int unsigned, assignee_contact_id int unsigned, assignee_contact_name varchar(255) )
-                ENGINE=MYISAM DEFAULT CHARACTER SET utf8 COLLATE utf8_unicode_ci";
-
+    $query = "
+CREATE TEMPORARY TABLE {$activityAssigneetContactTempTable} (
+  activity_id int unsigned,
+  assignee_contact_id int unsigned,
+  assignee_contact_name varchar(255)
+) ENGINE=MYISAM DEFAULT CHARACTER SET utf8 COLLATE utf8_unicode_ci
+";
     CRM_Core_DAO::executeQuery($query);
 
     // note that we ignore bulk email for assignee, since we don't show it in selector
-    $query = "INSERT INTO {$activityAssigneetContactTempTable} ( activity_id, assignee_contact_id, assignee_contact_name )
-                  SELECT DISTINCT ( aa.activity_id ) ,
-                  aa.assignee_contact_id,
-                  c.sort_name
-                  FROM civicrm_activity_assignment aa
-                  INNER JOIN {$activityTempTable} ON ( aa.activity_id = {$activityTempTable}.activity_id
-                             {$notbulkActivityClause} )
-                  INNER JOIN civicrm_contact c ON c.id = aa.assignee_contact_id
-                  WHERE c.is_deleted = 0";
-
+    $query = "
+INSERT INTO {$activityAssigneetContactTempTable} ( activity_id, assignee_contact_id, assignee_contact_name )
+     SELECT aa.activity_id, aa.contact_id, c.sort_name
+       FROM civicrm_activity_contact aa
+ INNER JOIN {$activityTempTable} ON (aa.activity_id = {$activityTempTable}.activity_id AND aa.record_type = 'Assignee')
+ INNER JOIN civicrm_contact c ON c.id = aa.assignee_contact_id
+      WHERE c.is_deleted = 0 AND {$notbulkActivityClause}
+";
     CRM_Core_DAO::executeQuery($query);
 
     // step 3: Combine all temp tables to get final query for activity selector
@@ -1018,9 +1021,9 @@ LEFT JOIN   civicrm_case_activity ON ( civicrm_case_activity.activity_id = tbl.a
 
     $config = CRM_Core_Config::singleton();
     if (!CRM_Utils_Array::value('admin', $input, FALSE)) {
-      $sourceWhere   = ' source_contact_id = %1 ';
-      $targetWhere   = ' at.target_contact_id = %1 ';
-      $assigneeWhere = ' aa.assignee_contact_id = %1 ';
+      $sourceWhere   = ' ac.contact_id = %1 ';
+      $targetWhere   = ' ac.contact_id = %1 ';
+      $assigneeWhere = ' ac.contact_id = %1 ';
       $caseWhere     = ' civicrm_case_contact.contact_id = %1 ';
 
       $params = array(1 => array($input['contact_id'], 'Integer'));
@@ -1092,8 +1095,8 @@ LEFT JOIN   civicrm_case_activity ON ( civicrm_case_activity.activity_id = tbl.a
                 civicrm_activity.activity_date_time,
                 civicrm_activity.status_id,
                 civicrm_activity.subject,
-                civicrm_activity.source_contact_id,
                 civicrm_activity.source_record_id,
+                ac.record_type as record_type,
                 sourceContact.sort_name as source_contact_name,
                 civicrm_option_value.value as activity_type_id,
                 civicrm_option_value.label as activity_type,
@@ -1102,74 +1105,20 @@ LEFT JOIN   civicrm_case_activity ON ( civicrm_case_activity.activity_id = tbl.a
             ';
 
       $sourceJoin = '
-                left join civicrm_contact sourceContact on
-                      source_contact_id = sourceContact.id ';
+                INNER JOIN civicrm_contact sourceContact on ac.contact_id = sourceContact.id ';
     }
 
     $sourceClause = "
             SELECT civicrm_activity.id as activity_id
             {$sourceSelect}
-            from civicrm_activity
-            left join civicrm_option_value on
-                civicrm_activity.activity_type_id = civicrm_option_value.value
-            left join civicrm_option_group on
-                civicrm_option_group.id = civicrm_option_value.option_group_id
+            FROM civicrm_activity
+            INNER JOIN civicrm_activity_contact ac ON ac.activity_id = civicrm_activity.id
+            LEFT JOIN civicrm_option_value ON civicrm_activity.activity_type_id = civicrm_option_value.value
+            LEFT JOIN civicrm_option_group ON civicrm_option_group.id = civicrm_option_value.option_group_id
             {$sourceJoin}
-            where
+            WHERE
                     {$sourceWhere}
                 AND $commonClause
-        ";
-
-    // build target activity table select clause
-    $targetAssigneeSelect = '';
-
-    if (!$input['count']) {
-      $targetAssigneeSelect = ',
-                civicrm_activity.activity_date_time,
-                civicrm_activity.status_id,
-                civicrm_activity.subject,
-                civicrm_activity.source_contact_id,
-                civicrm_activity.source_record_id,
-                sourceContact.sort_name as source_contact_name,
-                civicrm_option_value.value as activity_type_id,
-                civicrm_option_value.label as activity_type,
-                null as case_id, null as case_subject,
-                civicrm_activity.campaign_id as campaign_id
-            ';
-    }
-
-    $targetClause = "
-            SELECT civicrm_activity.id as activity_id
-            {$targetAssigneeSelect}
-            from civicrm_activity
-            inner join civicrm_activity_target at on
-                civicrm_activity.id = at.activity_id and {$targetWhere}
-            left join civicrm_option_value on
-                civicrm_activity.activity_type_id = civicrm_option_value.value
-            left join civicrm_option_group on
-                civicrm_option_group.id = civicrm_option_value.option_group_id
-            {$sourceJoin}
-            where
-                    {$targetWhere}
-                AND $commonClause
-        ";
-
-    // build assignee activity table select clause
-    $assigneeClause = "
-            SELECT civicrm_activity.id as activity_id
-            {$targetAssigneeSelect}
-            from civicrm_activity
-            inner join civicrm_activity_assignment aa on
-                civicrm_activity.id = aa.activity_id and {$assigneeWhere}
-            left join civicrm_option_value on
-                civicrm_activity.activity_type_id = civicrm_option_value.value
-            left join civicrm_option_group on
-                civicrm_option_group.id = civicrm_option_value.option_group_id
-            {$sourceJoin}
-            where
-                    {$assigneeWhere}
-                AND $commonClause
-
         ";
 
     // Build case clause
@@ -1220,7 +1169,7 @@ LEFT JOIN   civicrm_case_activity ON ( civicrm_case_activity.activity_id = tbl.a
             ";
     }
 
-    $returnClause = " {$sourceClause}  union all {$targetClause} union all {$assigneeClause} {$caseClause} ";
+    $returnClause = " {$sourceClause}  {$caseClause} ";
 
     return array($returnClause, $params);
   }
@@ -1730,28 +1679,44 @@ LEFT JOIN   civicrm_case_activity ON ( civicrm_case_activity.activity_id = tbl.a
     $activities = array();
 
     // First look for activities where contactId is one of the targets
-    $query = "SELECT activity_id FROM civicrm_activity_target
-                  WHERE  target_contact_id = $contactId";
-    $dao = CRM_Core_DAO::executeQuery($query, CRM_Core_DAO::$_nullArray);
+    $query = "
+SELECT activity_id
+FROM   civicrm_activity_contact
+WHERE  contact_id = %1
+AND    record_type = 'Target'
+";
+    $params = array(1 => array($contactId, 'Integer'));
+    $dao = CRM_Core_DAO::executeQuery($query, $params);
     while ($dao->fetch()) {
       $activities[$dao->activity_id]['targets'][$contactId] = $contactId;
     }
 
     // Then get activities where contactId is an asignee
-    $query = "SELECT activity_id FROM civicrm_activity_assignment
-                  WHERE  assignee_contact_id = $contactId";
-    $dao = CRM_Core_DAO::executeQuery($query, CRM_Core_DAO::$_nullArray);
+    $query = "
+SELECT activity_id
+FROM   civicrm_activity_contact
+WHERE  contact_id = %1
+AND    record_type = 'Assignee'
+";
+    $params = array(1 => array($contactId, 'Integer'));
+    $dao = CRM_Core_DAO::executeQuery($query, $params);
     while ($dao->fetch()) {
       $activities[$dao->activity_id]['asignees'][$contactId] = $contactId;
     }
 
     // Then get activities that contactId created
-    $query = "SELECT id AS activity_id FROM civicrm_activity
-                  WHERE  source_contact_id = $contactId";
-    $dao = CRM_Core_DAO::executeQuery($query, CRM_Core_DAO::$_nullArray);
+    $query = "
+SELECT activity_id
+FROM   civicrm_activity_contact
+WHERE  contact_id = %1
+AND    record_type = 'Source'
+";
+    $params = array(1 => array($contactId, 'Integer'));
+    $dao = CRM_Core_DAO::executeQuery($query, $params);
     while ($dao->fetch()) {
       $activities[$dao->activity_id]['source_contact_id'][] = $contactId;
     }
+
     $activityIds = array();
     // Then look up the activity details for each activity_id we saw above
     foreach ($activities as $activityId => $dummy) {
@@ -1760,28 +1725,36 @@ LEFT JOIN   civicrm_case_activity ON ( civicrm_case_activity.activity_id = tbl.a
     if (count($activityIds) < 1) {
       return array();
     }
-    $activityIds = implode(',', $activityIds);
-    $query = "SELECT     activity.id as activity_id, source_contact_id, target_contact_id, assignee_contact_id, activity_type_id,
-                             subject, location, activity_date_time, details, status_id
-                  FROM       civicrm_activity activity
-                  LEFT JOIN  civicrm_activity_target target ON activity.id = target.activity_id
-                  LEFT JOIN  civicrm_activity_assignment assignment ON activity.id = assignment.activity_id
-                  WHERE      activity.id IN ($activityIds)";
 
-    $dao = CRM_Core_DAO::executeQuery($query, CRM_Core_DAO::$_nullArray);
+    $activityIds = implode(',', $activityIds);
+    $query = "
+SELECT     activity.id as activity_id, ac.contact_id as contact_id, ac.record_type as record_type, activity_type_id,
+           subject, location, activity_date_time, details, status_id
+FROM       civicrm_activity activity
+INNER JOIN civicrm_activity_contact ac ON activity.id = ac.activity_id
+WHERE      activity.id IN ($activityIds)";
+
+    $dao = CRM_Core_DAO::executeQuery($query);
 
     $activityTypes = CRM_Core_OptionGroup::values('activity_type');
     $activityStatuses = CRM_Core_OptionGroup::values('activity_status');
 
     while ($dao->fetch()) {
-      $activities[$dao->activity_id]['source_contact_id'] = $dao->source_contact_id;
+      switch ($dao->record_type) {
+        case 'Source':
+          $activities[$dao->activity_id]['source_contact_id'] = $dao->ac_contact_id;
+          break;
+
+        case 'Target':
+          $activities[$dao->activity_id]['targets'][$dao->target_contact_id] = $dao->contact_id;
+          break;
+
+        case 'Assignee':
+          $activities[$dao->activity_id]['asignees'][$dao->assignee_contact_id] = $dao->contact_id;
+          break;
+      }
+
       $activities[$dao->activity_id]['id'] = $dao->activity_id;
-      if ($dao->target_contact_id) {
-        $activities[$dao->activity_id]['targets'][$dao->target_contact_id] = $dao->target_contact_id;
-      }
-      if (isset($dao->assignee_contact_id)) {
-        $activities[$dao->activity_id]['asignees'][$dao->assignee_contact_id] = $dao->assignee_contact_id;
-      }
       $activities[$dao->activity_id]['activity_type_id'] = $dao->activity_type_id;
       $activities[$dao->activity_id]['subject'] = $dao->subject;
       $activities[$dao->activity_id]['location'] = $dao->location;
@@ -2249,42 +2222,35 @@ AND cl.modified_id  = c.id
 
     // delete activity if there are no record in
     // civicrm_activity_assignment or civicrm_activity_target
-    // pointing to any other contact record.
+    // pointing to any other contact record
 
-
-    $activity = new CRM_Activity_DAO_Activity();
-    $activity->source_contact_id = $contactId;
+    // a bit wierd that we use source for this
+    $activity = new CRM_Activity_DAO_ActivityContact();
+    $activity->contact_id  = $contactId;
+    $activity->record_type = 'Source';
     $activity->find();
 
     while ($activity->fetch()) {
-      $noTarget = $noAssignee = TRUE;
 
-      // check for target activity record.
-      $target = new CRM_Activity_DAO_ActivityTarget();
-      $target->activity_id = $activity->id;
-      $target->find();
-      while ($target->fetch()) {
-        if ($target->target_contact_id != $contactId) {
-          $noTarget = FALSE;
-          break;
-        }
+      $sql = "
+SELECT count(*) as count
+FROM   civicrm_activity_contact ac
+WHERE  ac.activity_id = %1
+AND    (ac.record_type = 'Target' OR ac.record_type = 'Assignee')
+AND    ac.contact_id <> %1
+AND    ac.activity_id = %2
+";
+      $params = array(
+        1 => array($contactId, 'Integer'),
+        2 => array($activity->id, 'Integer')
+      );
+
+      $keepActivity = FALSE;
+      if (CRM_Core_DAO::singleValueQuery($query, $params)) {
+        $keepActivity = TRUE;
       }
-      $target->free();
 
-      // check for assignee activity record.
-      $assignee = new CRM_Activity_DAO_ActivityAssignment();
-      $assignee->activity_id = $activity->id;
-      $assignee->find();
-      while ($assignee->fetch()) {
-        if ($assignee->assignee_contact_id != $contactId) {
-          $noAssignee = FALSE;
-          break;
-        }
-      }
-      $assignee->free();
-
-      // finally delete activity.
-      if ($noTarget && $noAssignee) {
+      if (! $keepActivity) {
         $activityParams = array('id' => $activity->id);
         $result = self::deleteActivity($activityParams);
       }

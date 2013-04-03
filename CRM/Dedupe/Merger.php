@@ -90,7 +90,7 @@ class CRM_Dedupe_Merger {
         ),
         'rel_table_activities' => array(
           'title' => ts('Activities'),
-          'tables' => array('civicrm_activity', 'civicrm_activity_target', 'civicrm_activity_assignment'),
+          'tables' => array('civicrm_activity', 'civicrm_activity_contact'),
           'url' => CRM_Utils_System::url('civicrm/contact/view', 'reset=1&force=1&cid=$cid&selectedChild=activity'),
         ),
         'rel_table_relationships' => array(

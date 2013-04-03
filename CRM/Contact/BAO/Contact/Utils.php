@@ -704,22 +704,32 @@ LEFT JOIN  civicrm_email ce ON ( ce.contact_id=c.id AND ce.is_primary = 1 )
    * @return $contactDetails array of contact info.
    * @static
    */
-  static function contactDetails($componentIds, $componentName, $returnProperties = array(
-    )) {
+  static function contactDetails(
+    $componentIds,
+    $componentName,
+    $returnProperties = array()
+  ) {
     $contactDetails = array();
-    if (empty($componentIds) ||
+    if (
+      empty($componentIds) ||
       !in_array($componentName, array('CiviContribute', 'CiviMember', 'CiviEvent', 'Activity'))
     ) {
       return $contactDetails;
     }
 
     if (empty($returnProperties)) {
-      $autocompleteContactSearch = CRM_Core_BAO_Setting::valueOptions(CRM_Core_BAO_Setting::SYSTEM_PREFERENCES_NAME,
-        'contact_autocomplete_options'
-      );
-      $returnProperties = array_fill_keys(array_merge(array('sort_name'),
+      $autocompleteContactSearch =
+        CRM_Core_BAO_Setting::valueOptions(
+          CRM_Core_BAO_Setting::SYSTEM_PREFERENCES_NAME,
+          'contact_autocomplete_options'
+        );
+      $returnProperties =
+        array_fill_keys(
+          array_merge(array('sort_name'),
           array_keys($autocompleteContactSearch)
-        ), 1);
+          ),
+          1
+        );
     }
 
     $compTable = NULL;
@@ -753,10 +763,10 @@ LEFT JOIN  civicrm_email ce ON ( ce.contact_id=c.id AND ce.is_primary = 1 )
           break;
 
         case 'target_sort_name':
-          $select[] = "contact_target.sort_name as $property";
+          $select[] = "contact_activity.sort_name as $property";
           $from[$value] = "INNER JOIN civicrm_contact contact_source ON ( contact_source.id = $compTable.source_contact_id )
-                                 LEFT JOIN civicrm_activity_target ON (civicrm_activity_target.activity_id = $compTable.id)
-                                 LEFT JOIN civicrm_contact as contact_target ON ( contact_target.id = civicrm_activity_target.target_contact_id )";
+                                 LEFT JOIN civicrm_activity_contact ON (civicrm_activity_contact.activity_id = $compTable.id)
+                                 LEFT JOIN civicrm_contact as contact_activity ON ( contact_activity.id = civicrm_activity_contact.contact_id )";
           break;
 
         case 'email':

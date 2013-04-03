@@ -99,9 +99,8 @@
                         <td>{$row.activity_type}</td>
                         <td>{$row.subject|mb_truncate:40}</td>
                         <td>{$row.details|escape}</td>
-                        <td><a href="{crmURL p='civicrm/contact/view' q="reset=1&cid=`$row.contact_id`&context=fulltext&key=`$qfKey`"}" title="{ts}View contact details{/ts}">{$row.sort_name}</a></td>
-                        <td><a href="{crmURL p='civicrm/contact/view' q="reset=1&cid=`$row.target_contact_id`&context=fulltext&key=`$qfKey`"}" title="{ts}View contact details{/ts}">{$row.target_sort_name}</a></td>
-                        <td><a href="{crmURL p='civicrm/contact/view' q="reset=1&cid=`$row.assignee_contact_id`&context=fulltext&key=`$qfKey`"}" title="{ts}View contact details{/ts}">{$row.assignee_sort_name}</a></td>
+                        <td><a href="{crmURL p='civicrm/contact/view' q="reset=1&cid=`$row.act_contact_id`&context=fulltext&key=`$qfKey`"}" title="{ts}View contact details{/ts}">{$row.act_sort_name}</a></td>
+                        <td>{$row.record_type|escape}</td>
                         <td>
                             {if $row.case_id }
                                 <a href="{crmURL p='civicrm/case/activity/view' q="reset=1&aid=`$row.activity_id`&cid=`$row.client_id`&caseID=`$row.case_id`&context=fulltext&key=`$qfKey`"}">

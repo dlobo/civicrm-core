@@ -37,7 +37,7 @@
  * This class is for activity assignment functions
  *
  */
-class CRM_Activity_BAO_ActivityTarget extends CRM_Activity_DAO_ActivityTarget {
+class CRM_Activity_BAO_ActivityTarget extends CRM_Activity_DAO_ActivityContact {
 
   /**
    * class constructor
@@ -60,6 +60,7 @@ class CRM_Activity_BAO_ActivityTarget extends CRM_Activity_DAO_ActivityTarget {
     $target = new CRM_Activity_BAO_ActivityTarget();
 
     $target->copyValues($params);
+    $target->record_type = 'Target';
     return $target->save();
   }
 
@@ -79,12 +80,14 @@ class CRM_Activity_BAO_ActivityTarget extends CRM_Activity_DAO_ActivityTarget {
       return $targetArray;
     }
 
-    $sql = '
-            SELECT target_contact_id
-            FROM civicrm_activity_target
-            JOIN civicrm_contact ON target_contact_id = civicrm_contact.id
-            WHERE activity_id = %1 AND civicrm_contact.is_deleted = 0
-        ';
+    $sql = "
+SELECT     contact_id
+FROM       civicrm_activity_contact
+INNER JOIN civicrm_contact ON contact_id = civicrm_contact.id
+WHERE      activity_id = %1
+AND        record_type = 'Target'
+AND        civicrm_contact.is_deleted = 0
+";
     $target = CRM_Core_DAO::executeQuery($sql, array(1 => array($activity_id, 'Integer')));
     while ($target->fetch()) {
       $targetArray[] = $target->target_contact_id;
@@ -109,13 +112,16 @@ class CRM_Activity_BAO_ActivityTarget extends CRM_Activity_DAO_ActivityTarget {
       return $targetNames;
     }
 
-    $query = "SELECT contact_a.id, contact_a.sort_name 
-                  FROM civicrm_contact contact_a 
-                  LEFT JOIN civicrm_activity_target 
-                         ON civicrm_activity_target.target_contact_id = contact_a.id
-                  WHERE civicrm_activity_target.activity_id = %1 AND contact_a.is_deleted = 0";
+    $query = "
+SELECT     contact_a.id, contact_a.sort_name
+FROM       civicrm_contact contact_a
+INNER JOIN civicrm_activity_contact ON civicrm_activity_contact.contact_id = contact_a.id
+WHERE      civicrm_activity_contact.activity_id = %1
+AND        civicrm_activity_contact.record_type = 'Target'
+AND        contact_a.is_deleted = 0
+           {$whereClause}
+";
     $queryParam = array(1 => array($activityID, 'Integer'));
-
     $dao = CRM_Core_DAO::executeQuery($query, $queryParam);
     while ($dao->fetch()) {
       $targetNames[$dao->id] = $dao->sort_name;

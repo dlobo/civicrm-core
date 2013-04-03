@@ -146,10 +146,9 @@ class CRM_Contact_Form_Search_Custom_FullText implements CRM_Contact_Form_Search
       'table_name' => 'varchar(16)',
       'contact_id' => 'int unsigned',
       'sort_name' => 'varchar(128)',
-      'assignee_contact_id' => 'int unsigned',
-      'assignee_sort_name' => 'varchar(128)',
-      'target_contact_id' => 'int unsigned',
-      'target_sort_name' => 'varchar(128)',
+      'act_contact_id' => 'int unsigned',
+      'act_sort_name' => 'varchar(128)',
+      'act_record_type' => 'varchar(16)',
       'activity_id' => 'int unsigned',
       'activity_type_id' => 'int unsigned',
       'client_id' => 'int unsigned',
@@ -287,17 +286,7 @@ FROM       {$this->_tableName} t
 WHERE      t.table_name = 'Activity' AND
            NOT EXISTS ( SELECT c.id
                         FROM civicrm_acl_contact_cache c
-                        WHERE c.user_id = %1 AND ( t.target_contact_id = c.contact_id OR t.target_contact_id IS NULL ) )
-";
-    CRM_Core_DAO::executeQuery($sql, $params);
-
-    $sql = "
-DELETE     t.*
-FROM       {$this->_tableName} t
-WHERE      t.table_name = 'Activity' AND
-           NOT EXISTS ( SELECT c.id
-                        FROM civicrm_acl_contact_cache c
-                        WHERE c.user_id = %1 AND ( t.assignee_contact_id = c.contact_id OR t.assignee_contact_id IS NULL ) )
+                        WHERE c.user_id = %1 AND ( t.act_contact_id = c.contact_id OR t.act_contact_id IS NULL ) )
 ";
     CRM_Core_DAO::executeQuery($sql, $params);
   }
@@ -477,48 +466,15 @@ GROUP BY   et.entity_id
     $contactSQL[] = "
 SELECT     distinct ca.id
 FROM       civicrm_activity ca
-INNER JOIN civicrm_contact c ON ca.source_contact_id = c.id
-LEFT JOIN  civicrm_email e ON e.contact_id = c.id
-LEFT JOIN  civicrm_option_group og ON og.name = 'activity_type'
-LEFT JOIN  civicrm_option_value ov ON ( ov.option_group_id = og.id )
-WHERE      ( (c.sort_name LIKE {$this->_text} OR c.display_name LIKE {$this->_text}) OR
-             (e.email LIKE {$this->_text}    AND
-              ca.activity_type_id = ov.value AND
-              ov.name IN ('Inbound Email', 'Email') ) )
-AND        (ca.is_deleted = 0 OR ca.is_deleted IS NULL)
-AND        (c.is_deleted = 0 OR c.is_deleted IS NULL)
-";
-
-    $contactSQL[] = "
-SELECT     distinct ca.id
-FROM       civicrm_activity ca
-INNER JOIN civicrm_activity_target cat ON cat.activity_id = ca.id
-INNER JOIN civicrm_contact c ON cat.target_contact_id = c.id
-LEFT  JOIN civicrm_email e ON cat.target_contact_id = e.contact_id
+INNER JOIN civicrm_activity_contact cat ON cat.activity_id = ca.id
+INNER JOIN civicrm_contact c ON cat.contact_id = c.id
+LEFT  JOIN civicrm_email e ON cat.contact_id = e.contact_id
 LEFT  JOIN civicrm_option_group og ON og.name = 'activity_type'
 LEFT  JOIN civicrm_option_value ov ON ( ov.option_group_id = og.id )
 WHERE      ( (c.sort_name LIKE {$this->_text} OR c.display_name LIKE {$this->_text}) OR
              ( e.email LIKE {$this->_text}    AND
                ca.activity_type_id = ov.value AND
                ov.name IN ('Inbound Email', 'Email') ) )
-AND        (ca.is_deleted = 0 OR ca.is_deleted IS NULL)
-AND        (c.is_deleted = 0 OR c.is_deleted IS NULL)
-";
-
-    $contactSQL[] = "
-SELECT     distinct ca.id
-FROM       civicrm_activity ca
-INNER JOIN civicrm_activity_assignment caa ON caa.activity_id = ca.id
-INNER JOIN civicrm_contact c ON caa.assignee_contact_id = c.id
-LEFT  JOIN civicrm_email e ON caa.assignee_contact_id = e.contact_id
-LEFT  JOIN civicrm_option_group og ON og.name = 'activity_type'
-LEFT  JOIN civicrm_option_value ov ON ( ov.option_group_id = og.id )
-WHERE      caa.activity_id = ca.id
-AND        caa.assignee_contact_id = c.id
-AND        ( (c.sort_name LIKE {$this->_text} OR c.display_name LIKE {$this->_text})  OR
-             (e.email LIKE {$this->_text} AND
-              ca.activity_type_id = ov.value AND
-              ov.name IN ('Inbound Email', 'Email')) )
 AND        (ca.is_deleted = 0 OR ca.is_deleted IS NULL)
 AND        (c.is_deleted = 0 OR c.is_deleted IS NULL)
 ";
@@ -546,7 +502,8 @@ AND    (ca.is_deleted = 0 OR ca.is_deleted IS NULL)
     $final[] = "
 DELETE e.* FROM {$this->_entityIDTableName} e
 INNER JOIN  civicrm_activity a ON e.entity_id = a.id
-INNER JOIN  civicrm_contact  c ON a.source_contact_id = c.id
+INNER JOIN  civicrm_activity_contact ac ON ac.activity_id = a.id
+INNER JOIN  civicrm_contact  c ON ac.contact_id = c.id
 WHERE       c.id IN (SELECT id FROM civicrm_contact WHERE is_deleted = 1)
 ";
 
@@ -936,22 +893,17 @@ INNER JOIN civicrm_contact c ON ct.entity_id = c.id
       case 'Activity':
         $sql = "
 INSERT INTO {$this->_tableName}
-( table_name, activity_id, subject, details, contact_id, sort_name, assignee_contact_id, assignee_sort_name, target_contact_id,
-  target_sort_name, activity_type_id, case_id, client_id )
+( table_name, activity_id, subject, details, act_contact_id, act_sort_name, act_record_type
+  activity_type_id, case_id, client_id )
 SELECT    'Activity', ca.id, substr(ca.subject, 1, 50), substr(ca.details, 1, 250),
-           c1.id, c1.sort_name,
-           c2.id, c2.sort_name,
-           c3.id, c3.sort_name,
+           c1.id, c1.sort_name, cac.record_type
            ca.activity_type_id,
            cca.case_id,
            ccc.contact_id as client_id
 FROM       {$this->_entityIDTableName} eid
 INNER JOIN civicrm_activity ca ON ca.id = eid.entity_id
-LEFT JOIN  civicrm_contact c1 ON ca.source_contact_id = c1.id
-LEFT JOIN  civicrm_activity_assignment caa ON caa.activity_id = ca.id
-LEFT JOIN  civicrm_contact c2 ON caa.assignee_contact_id = c2.id
-LEFT JOIN  civicrm_activity_target cat ON cat.activity_id = ca.id
-LEFT JOIN  civicrm_contact c3 ON cat.target_contact_id = c3.id
+INNER JOIN civicrm_activity_contact ca ON cac.activity_id = ca.id
+INNER JOIN civicrm_contact c1 ON cac.contact_id = c1.id
 LEFT JOIN  civicrm_case_activity cca ON cca.activity_id = ca.id
 LEFT JOIN  civicrm_case_contact ccc ON ccc.case_id = cca.case_id
 WHERE (ca.is_deleted = 0 OR ca.is_deleted IS NULL)

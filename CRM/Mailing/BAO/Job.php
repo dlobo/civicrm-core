@@ -906,7 +906,13 @@ AND    civicrm_activity.source_record_id = %2";
         if (CRM_Core_BAO_Email::isMultipleBulkMail()) {
           // make sure we don't attempt to duplicate the target activity
           foreach ($activity['target_contact_id'] as $key => $targetID) {
-            $sql = "SELECT id FROM civicrm_activity_target WHERE activity_id = $activityID AND target_contact_id = $targetID;";
+            $sql = "
+SELECT id
+FROM   civicrm_activity_contact
+WHERE  activity_id = $activityID
+AND    record_type = 'Target'
+AND    contact_id = $targetID
+";
             if (CRM_Core_DAO::singleValueQuery($sql)) {
               unset($activity['target_contact_id'][$key]);
             }
