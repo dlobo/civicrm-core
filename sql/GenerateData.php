@@ -1561,8 +1561,6 @@ VALUES
 ";
     $this->_query($participant);
 
-    $currentActivityID = CRM_Core_DAO::singleValueQuery("SELECT MAX(id) FROM civicrm_activity");
-
     $query = "
 INSERT INTO civicrm_activity
     (source_record_id, activity_type_id, subject, activity_date_time, duration, location, phone_id, phone_number, details, priority_id,parent_id, is_test, status_id)
@@ -1622,9 +1620,12 @@ VALUES
 
     $activityContact = "
 INSERT INTO civicrm_activity_contact
-  (activity_id, contact_id, record_type)
+  (contact_id, activity_id, record_type)
 VALUES
 ";
+
+    $currentActivityID = CRM_Core_DAO::singleValueQuery("SELECT MAX(id) FROM civicrm_activity");
+    $currentActivityID -= 50;
     for ($i = 0; $i < 50; $i++) {
       $currentActivityID++;
       $activityContact .= "({$randomContacts[$i]}, $currentActivityID, 'Source')";
@@ -1667,7 +1668,6 @@ VALUES
     $this->_query($query);
 
     $currentActivityID = CRM_Core_DAO::singleValueQuery("SELECT MAX(id) FROM civicrm_activity");
-
     $query = "
 INSERT INTO civicrm_activity
     (source_record_id, activity_type_id, subject, activity_date_time, duration, location, phone_id, phone_number, details, priority_id,parent_id, is_test, status_id)
@@ -1690,11 +1690,11 @@ VALUES
 
     $activityContact = "
 INSERT INTO civicrm_activity_contact
-  (activity_id, contact_id, record_type)
+  (contact_id, activity_id, record_type)
 VALUES
 ";
 
-    $arbitraryNumbers = array(2, 4, 6, 8, 16, 19, 82, 92, 34, 71, 43, 32, 43);
+    $arbitraryNumbers = array(2, 4, 6, 8, 16, 19, 82, 92, 34, 71, 43, 32, 32);
     for ($i = 0; $i < count($arbitraryNumbers); $i++) {
       $currentActivityID++;
       $activityContact .= "({$arbitraryNumbers[$i]}, $currentActivityID, 'Source')";
@@ -1855,7 +1855,7 @@ SELECT id, 6, CONCAT('$ ', total_amount, ' - ', source), now(), 2, 'Membership P
     $sql = "INSERT INTO civicrm_activity_contact(contact_id, activity_id, record_type)
 SELECT c.contact_id, a.id, 'Source'
 FROM   civicrm_contribution c, civicrm_activity a
-WHERE  id > $maxContribution
+WHERE  c.id > $maxContribution
 AND    a.source_record_id = c.id
 AND    a.details = 'Membership Payment'
 ";
@@ -1886,7 +1886,7 @@ SELECT id, 6, CONCAT('$ ', total_amount, ' - ', source), now(), 2, 'Participant'
     $sql = "INSERT INTO civicrm_activity_contact(contact_id, activity_id, record_type)
 SELECT c.contact_id, a.id, 'Source'
 FROM   civicrm_contribution c, civicrm_activity a
-WHERE  id > $maxContribution
+WHERE  c.id > $maxContribution
 AND    a.source_record_id = c.id
 AND    a.details = 'Participant Payment'
 ";
