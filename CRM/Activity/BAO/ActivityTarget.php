@@ -57,7 +57,7 @@ class CRM_Activity_BAO_ActivityTarget extends CRM_Activity_DAO_ActivityContact {
    *
    */
   public static function create(&$params) {
-    $target = new CRM_Activity_BAO_ActivityTarget();
+    $target = new CRM_Activity_DAO_ActivityContact();
 
     $target->copyValues($params);
     $target->record_type = 'Target';
@@ -90,7 +90,7 @@ AND        civicrm_contact.is_deleted = 0
 ";
     $target = CRM_Core_DAO::executeQuery($sql, array(1 => array($activity_id, 'Integer')));
     while ($target->fetch()) {
-      $targetArray[] = $target->target_contact_id;
+      $targetArray[] = $target->contact_id;
     }
     return $targetArray;
   }
@@ -119,9 +119,9 @@ INNER JOIN civicrm_activity_contact ON civicrm_activity_contact.contact_id = con
 WHERE      civicrm_activity_contact.activity_id = %1
 AND        civicrm_activity_contact.record_type = 'Target'
 AND        contact_a.is_deleted = 0
-           {$whereClause}
 ";
     $queryParam = array(1 => array($activityID, 'Integer'));
+
     $dao = CRM_Core_DAO::executeQuery($query, $queryParam);
     while ($dao->fetch()) {
       $targetNames[$dao->id] = $dao->sort_name;

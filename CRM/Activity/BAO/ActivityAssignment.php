@@ -57,7 +57,7 @@ class CRM_Activity_BAO_ActivityAssignment extends CRM_Activity_DAO_ActivityConta
    *
    */
   public static function create(&$params) {
-    $assignment = new CRM_Activity_BAO_ActivityAssignment();
+    $assignment = new CRM_Activity_DAO_ActivityContact();
 
     $assignment->copyValues($params);
     $assignment->record_type = 'Assignee';
@@ -90,7 +90,7 @@ AND        civicrm_contact.is_deleted = 0
 ";
     $assignment = CRM_Core_DAO::executeQuery($sql, array(1 => array($activity_id, 'Integer')));
     while ($assignment->fetch()) {
-      $assigneeArray[] = $assignment->assignee_contact_id;
+      $assigneeArray[] = $assignment->contact_id;
     }
 
     return $assigneeArray;

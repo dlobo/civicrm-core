@@ -64,7 +64,8 @@ class CRM_Activity_BAO_Activity extends CRM_Activity_DAO_Activity {
    * @access public
    */
   public static function dataExists(&$params) {
-    if (CRM_Utils_Array::value('source_contact_id', $params) ||
+    if (
+      CRM_Utils_Array::value('source_contact_id', $params) ||
       CRM_Utils_Array::value('id', $params)
     ) {
       return TRUE;
@@ -91,6 +92,16 @@ class CRM_Activity_BAO_Activity extends CRM_Activity_DAO_Activity {
     $activity->copyValues($params);
 
     if ($activity->find(TRUE)) {
+
+      // lets also set the source_contact_id
+      $sql = "
+SELECT contact_id
+FROM   civicrm_activity_contact
+WHERE  record_type = 'Source'
+AND    activity_id = {$activity->id}
+";
+      $activity->source_contact_id = CRM_Core_DAO::singleValueQuery($sql);
+
       // TODO: at some stage we'll have to deal
       // TODO: with multiple values for assignees and targets, but
       // TODO: for now, let's just fetch first row
@@ -105,26 +116,30 @@ class CRM_Activity_BAO_Activity extends CRM_Activity_DAO_Activity {
 
         $defaults['target_contact_value'] = implode('; ', $target_contact_names);
       }
-      elseif (CRM_Core_Permission::check('access CiviMail') ||
-        (CRM_Mailing_Info::workflowEnabled() &&
-          CRM_Core_Permission::check('create mailings')
-        )
+      elseif (
+        CRM_Core_Permission::check('access CiviMail') ||
+        (CRM_Mailing_Info::workflowEnabled() && CRM_Core_Permission::check('create mailings'))
       ) {
-        $defaults['mailingId'] = CRM_Utils_System::url('civicrm/mailing/report',
-          "mid={$activity->source_record_id}&reset=1&atype={$activity->activity_type_id}&aid={$activity->id}&cid={$activity->source_contact_id}&context=activity"
-        );
+        $defaults['mailingId'] =
+          CRM_Utils_System::url(
+            'civicrm/mailing/report',
+            "mid={$activity->source_record_id}&reset=1&atype={$activity->activity_type_id}" .
+            "&aid={$activity->id}&cid={$activity->source_contact_id}&context=activity"
+          );
       }
       else {
         $defaults['target_contact_value'] = ts('(recipients)');
       }
 
       if ($activity->source_contact_id &&
-        !CRM_Core_DAO::getFieldValue('CRM_Contact_DAO_Contact',
+        !CRM_Core_DAO::getFieldValue(
+          'CRM_Contact_DAO_Contact',
           $activity->source_contact_id,
           'is_deleted'
         )
       ) {
-        $defaults['source_contact'] = CRM_Core_DAO::getFieldValue('CRM_Contact_DAO_Contact',
+        $defaults['source_contact'] = CRM_Core_DAO::getFieldValue(
+          'CRM_Contact_DAO_Contact',
           $activity->source_contact_id,
           'sort_name'
         );
@@ -250,6 +265,7 @@ class CRM_Activity_BAO_Activity extends CRM_Activity_DAO_Activity {
   public static function deleteActivityAssignment($activityId) {
     $assignment = new CRM_Activity_BAO_ActivityAssignment();
     $assignment->activity_id = $activityId;
+    $assignment->record_type = 'Assignee';
     $assignment->delete();
   }
 
@@ -264,6 +280,7 @@ class CRM_Activity_BAO_Activity extends CRM_Activity_DAO_Activity {
   public static function deleteActivityTarget($activityId) {
     $target = new CRM_Activity_BAO_ActivityTarget();
     $target->activity_id = $activityId;
+    $target->record_type = 'Target';
     $target->delete();
   }
 
@@ -332,7 +349,8 @@ class CRM_Activity_BAO_Activity extends CRM_Activity_DAO_Activity {
       unset($params['id']);
     }
 
-    if (!CRM_Utils_Array::value('status_id', $params) &&
+    if (
+      !CRM_Utils_Array::value('status_id', $params) &&
       !CRM_Utils_Array::value('activity_status_id', $params) &&
       !CRM_Utils_Array::value('id', $params)
     ) {
@@ -392,6 +410,18 @@ class CRM_Activity_BAO_Activity extends CRM_Activity_DAO_Activity {
 
     $activityId = $activity->id;
 
+    // now save the source contact id if exists
+    if (!empty($params['source_contact_id'])) {
+      $acParams = array(
+        'activity_id' => $activity->id,
+        'contact_id'  => $params['source_contact_id'],
+        'record_type' => 'Source'
+      );
+      CRM_Activity_BAO_ActivityContact::create($acParams);
+
+      $activity->source_contact_id = $params['source_contact_id'];
+    }
+
     // check and attach and files as needed
     CRM_Core_BAO_File::processAttachment($params, 'civicrm_activity', $activityId);
 
@@ -421,14 +451,15 @@ class CRM_Activity_BAO_Activity extends CRM_Activity_DAO_Activity {
         }
       }
       else {
-        $assignmentParams['assignee_contact_id'] = $params['assignee_contact_id'];
+        $assignmentParams['contact_id'] = $params['assignee_contact_id'];
 
         if (CRM_Utils_Array::value('id', $params)) {
           $assignment = new CRM_Activity_BAO_ActivityAssignment();
           $assignment->activity_id = $activityId;
+          $assignment->record_type = 'Assignee';
           $assignment->find(TRUE);
 
-          if ($assignment->assignee_contact_id != $params['assignee_contact_id']) {
+          if ($assignment->contact_id != $params['assignee_contact_id']) {
             $assignmentParams['id'] = $assignment->id;
             $resultAssignment = CRM_Activity_BAO_ActivityAssignment::create($assignmentParams);
           }
@@ -476,11 +507,12 @@ class CRM_Activity_BAO_Activity extends CRM_Activity_DAO_Activity {
         }
       }
       else {
-        $targetParams['target_contact_id'] = $params['target_contact_id'];
+        $targetParams['contact_id'] = $params['target_contact_id'];
 
         if (CRM_Utils_Array::value('id', $params)) {
           $target = new CRM_Activity_BAO_ActivityTarget();
           $target->activity_id = $activityId;
+          $target->record_type = 'Target';
           $target->find(TRUE);
 
           if ($target->target_contact_id != $params['target_contact_id']) {
@@ -1646,7 +1678,8 @@ LEFT JOIN   civicrm_case_activity ON ( civicrm_case_activity.activity_id = tbl.a
       $tmpConatctField = array();
       if (is_array($fieldsArray)) {
         foreach ($fieldsArray as $value) {
-          $customFieldId = CRM_Core_DAO::getFieldValue('CRM_Core_DAO_CustomField',
+          $customFieldId = CRM_Core_DAO::getFieldValue(
+            'CRM_Core_DAO_CustomField',
             $value,
             'id',
             'column_name'
@@ -2273,15 +2306,21 @@ AND    ac.activity_id = %2
    */
   public static function checkPermission($activityId, $action) {
     $allow = FALSE;
-    if (!$activityId ||
+    if (
+      !$activityId ||
       !in_array($action, array(CRM_Core_Action::UPDATE, CRM_Core_Action::VIEW))
     ) {
       return $allow;
     }
 
-    $activity = new CRM_Activity_DAO_Activity();
-    $activity->id = $activityId;
-    if (!$activity->find(TRUE)) {
+    $sql = "
+SELECT     a.*, ac.contact_id as source_contact_id
+FROM       civicrm_activity a
+INNER JOIN civicrm_activity_contact ac ON a.id = ac.id
+WHERE      ac.record_type = 'Source'
+";
+    $activity = CRM_Core_DAO::executeQuery($sql);
+    if (!$activity->fetch()) {
       return $allow;
     }
 
@@ -2319,7 +2358,8 @@ AND    ac.activity_id = %2
         if ($action == CRM_Core_Action::UPDATE) {
           $oper = 'edit';
         }
-        $allow = CRM_Case_BAO_Case::checkPermission($activityId,
+        $allow = CRM_Case_BAO_Case::checkPermission(
+          $activityId,
           $oper,
           $activity->activity_type_id
         );
@@ -2327,7 +2367,6 @@ AND    ac.activity_id = %2
 
       return $allow;
     }
-
 
     //first check the component permission.
     $sql = "
