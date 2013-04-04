@@ -12,7 +12,7 @@ fi
 
 pushd .
 cd $CIVISOURCEDIR/bin
-# ./setup.sh
+./setup.sh
 cd $CIVISOURCEDIR/sql
 
 echo; echo "Dropping civicrm_* tables from database $DBNAME"

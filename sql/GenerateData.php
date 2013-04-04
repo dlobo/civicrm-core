@@ -1272,21 +1272,30 @@ INSERT INTO civicrm_membership
         (contact_id, membership_type_id, join_date, start_date, end_date, source, status_id)
 VALUES
 ";
-    // FIXME - ADD source_contact_id to civicrm_activity_contacts table
+
     $activity = "
 INSERT INTO civicrm_activity
         (source_record_id, activity_type_id, subject, activity_date_time, duration, location, phone_id, phone_number, details, priority_id,parent_id, is_test, status_id)
 VALUES
 ";
 
+    $activityContact = "
+INSERT INTO civicrm_activity_contact
+  (activity_id, contact_id, record_type)
+VALUES
+";
+
+    $currentActivityID = CRM_Core_DAO::singleValueQuery("SELECT MAX(id) FROM civicrm_activity");
     foreach ($randomContacts as $count => $dontCare) {
       $source = $this->randomItem($sources);
-      $acititySourceId = $count + 1;
+      $activitySourceId = $count + 1;
+      $currentActivityID++;
+      $activityContact .= "( $currentActivityID, {$randomContacts[$count]}, 'Source' )";
       if ((($count + 1) % 11 == 0)) {
         // lifetime membership, status can be anything
         $startDate = date('Y-m-d', mktime(0, 0, 0, date('m'), (date('d') - $count), date('Y')));
         $membership .= "( {$randomContacts[$count]}, 3, '{$startDate}', '{$startDate}', null, '{$source}', 1)";
-        $activity .= "( {$acititySourceId}, 7, 'Lifetime', '{$startDate} 00:00:00', NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 2 )";
+        $activity .= "( {$activitySourceId}, 7, 'Lifetime', '{$startDate} 00:00:00', NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 2 )";
       }
       elseif (($count + 1) % 5 == 0) {
         // Grace or expired, memberhsip type is random of 1 & 2
@@ -1313,32 +1322,33 @@ VALUES
           ));
 
         $membership .= "( {$randomContacts[$count]}, {$membershipTypeId}, '{$startDate}', '{$startDate}', '{$endDate}', '{$source}', {$membershipStatusId})";
-        $activity .= "( {$acititySourceId}, 7, '{$membershipTypeName}', '{$startDate} 00:00:00', NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 2 )";
+        $activity .= "( {$activitySourceId}, 7, '{$membershipTypeName}', '{$startDate} 00:00:00', NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 2 )";
       }
       elseif (($count + 1) % 2 == 0) {
         // membership type 2
         $startDate = date('Y-m-d', mktime(0, 0, 0, date('m'), (date('d') - $count), date('Y')));
         $endDate = date('Y-m-d', mktime(0, 0, 0, date('m'), (date('d') - ($count + 1)), (date('Y') + 1)));
         $membership .= "( {$randomContacts[$count]}, 2, '{$startDate}', '{$startDate}', '{$endDate}', '{$source}', 1)";
-        $activity .= "( {$acititySourceId}, 7, 'Student', '{$startDate} 00:00:00', NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 2 )";
+        $activity .= "( {$activitySourceId}, 7, 'Student', '{$startDate} 00:00:00', NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 2 )";
       }
       else {
         // membership type 1
         $startDate = date('Y-m-d', mktime(0, 0, 0, date('m'), (date('d') - $count), date('Y')));
         $endDate = date('Y-m-d', mktime(0, 0, 0, date('m'), (date('d') - ($count + 1)), (date('Y') + 2)));
         $membership .= "( {$randomContacts[$count]}, 1, '{$startDate}', '{$startDate}', '{$endDate}', '{$source}', 1)";
-        $activity .= "( {$acititySourceId}, 7, 'General', '{$startDate} 00:00:00', NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 2 )";
+        $activity .= "( {$activitySourceId}, 7, 'General', '{$startDate} 00:00:00', NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 2 )";
       }
 
       if ($count != 29) {
         $membership .= ",";
         $activity .= ",";
+        $activityContact .= ",";
       }
     }
 
     $this->_query($membership);
-
     $this->_query($activity);
+    $this->_query($activityContact);
   }
 
   static function repairDate($date) {
@@ -1551,7 +1561,8 @@ VALUES
 ";
     $this->_query($participant);
 
-    // FIXME - ADD source_contact_id to civicrm_activity_contacts table
+    $currentActivityID = CRM_Core_DAO::singleValueQuery("SELECT MAX(id) FROM civicrm_activity");
+
     $query = "
 INSERT INTO civicrm_activity
     (source_record_id, activity_type_id, subject, activity_date_time, duration, location, phone_id, phone_number, details, priority_id,parent_id, is_test, status_id)
@@ -1608,6 +1619,20 @@ VALUES
     (50, 5, 'NULL', '2009-04-05 00:00:00', NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 2 )
     ";
     $this->_query($query);
+
+    $activityContact = "
+INSERT INTO civicrm_activity_contact
+  (activity_id, contact_id, record_type)
+VALUES
+";
+    for ($i = 0; $i < 50; $i++) {
+      $currentActivityID++;
+      $activityContact .= "({$randomContacts[$i]}, $currentActivityID, 'Source')";
+      if ($i != 49) {
+        $activityContact .= ", ";
+      }
+    }
+    $this->_query($activityContact);
   }
 
   private function addPCP() {
@@ -1641,7 +1666,8 @@ VALUES
 ";
     $this->_query($query);
 
-    // FIXME - ADD source_contact_id to civicrm_activity_contacts table
+    $currentActivityID = CRM_Core_DAO::singleValueQuery("SELECT MAX(id) FROM civicrm_activity");
+
     $query = "
 INSERT INTO civicrm_activity
     (source_record_id, activity_type_id, subject, activity_date_time, duration, location, phone_id, phone_number, details, priority_id,parent_id, is_test, status_id)
@@ -1661,6 +1687,22 @@ VALUES
     (13, 6, NULL, '2009-12-01 12:55:41', NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 2 );
     ";
     $this->_query($query);
+
+    $activityContact = "
+INSERT INTO civicrm_activity_contact
+  (activity_id, contact_id, record_type)
+VALUES
+";
+
+    $arbitraryNumbers = array(2, 4, 6, 8, 16, 19, 82, 92, 34, 71, 43, 32, 43);
+    for ($i = 0; $i < count($arbitraryNumbers); $i++) {
+      $currentActivityID++;
+      $activityContact .= "({$arbitraryNumbers[$i]}, $currentActivityID, 'Source')";
+      if ($i != count($arbitraryNumbers) - 1) {
+        $activityContact .= ", ";
+      }
+    }
+    $this->_query($activityContact);
   }
 
   private function addSoftContribution() {
@@ -1804,13 +1846,19 @@ LEFT JOIN civicrm_price_field_value cpfv ON cpfv.membership_type_id = cm.members
 LEFT JOIN civicrm_price_field cpf ON cpf.id = cpfv.price_field_id
 LEFT JOIN civicrm_price_set cps ON cps.id = cpf.price_set_id
 WHERE cps.name = 'default_membership_type_amount'";
-
     $this->_query($sql);
 
-    // FIXME - ADD source_contact_id to civicrm_activity_contacts table
-    $sql = "INSERT INTO civicrm_activity(source_record_id, activity_type_id, subject, activity_date_time, status_id)
-SELECT id, 6, CONCAT('$ ', total_amount, ' - ', source), now(), 2 FROM `civicrm_contribution` WHERE id > $maxContribution";
+    $sql = "INSERT INTO civicrm_activity(source_record_id, activity_type_id, subject, activity_date_time, status_id, details)
+SELECT id, 6, CONCAT('$ ', total_amount, ' - ', source), now(), 2, 'Membership Payment' FROM civicrm_contribution WHERE id > $maxContribution";
+    $this->_query($sql);
 
+    $sql = "INSERT INTO civicrm_activity_contact(contact_id, activity_id, record_type)
+SELECT c.contact_id, a.id, 'Source'
+FROM   civicrm_contribution c, civicrm_activity a
+WHERE  id > $maxContribution
+AND    a.source_record_id = c.id
+AND    a.details = 'Membership Payment'
+";
     $this->_query($sql);
 }
 
@@ -1831,10 +1879,17 @@ WHERE cc.id > $maxContribution";
 
     $this->_query($sql);
 
-    // FIXME - ADD source_contact_id to civicrm_activity_contacts table
-    $sql = "INSERT INTO civicrm_activity(source_record_id, activity_type_id, subject, activity_date_time, status_id)
-SELECT id, 6, CONCAT('$ ', total_amount, ' - ', source), now(), 2 FROM `civicrm_contribution` WHERE id > $maxContribution";
+    $sql = "INSERT INTO civicrm_activity(source_record_id, activity_type_id, subject, activity_date_time, status_id, details)
+SELECT id, 6, CONCAT('$ ', total_amount, ' - ', source), now(), 2, 'Participant' FROM `civicrm_contribution` WHERE id > $maxContribution";
+    $this->_query($sql);
 
+    $sql = "INSERT INTO civicrm_activity_contact(contact_id, activity_id, record_type)
+SELECT c.contact_id, a.id, 'Source'
+FROM   civicrm_contribution c, civicrm_activity a
+WHERE  id > $maxContribution
+AND    a.source_record_id = c.id
+AND    a.details = 'Participant Payment'
+";
     $this->_query($sql);
   }
 }
