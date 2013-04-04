@@ -1157,6 +1157,7 @@ class CRM_GCD {
         $activityContactDAO->activity_id = $activityDAO->id;
         $activityContactDAO->contact_id = $contactDAO->id;
         $activityContactDAO->record_type = 'Source';
+        $this->_insert($activityContactDAO);
 
         if (in_array($activityTypeID, array(6, 9))) {
           $activityContactDAO = new CRM_Activity_DAO_ActivityContact();

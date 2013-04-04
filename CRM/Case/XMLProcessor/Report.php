@@ -234,30 +234,51 @@ AND    ac.case_id = %1
       }
 
       $query = "
-SELECT     a.*, aa.assignee_contact_id as assigneeID, at.target_contact_id as targetID
+SELECT     a.*, ac.contact_id as acContactID, ac.record_type as record_type
 {$selectCaseActivity}
 FROM       civicrm_activity a
-{$joinCaseActivity}
-LEFT JOIN civicrm_activity_target at ON a.id = at.activity_id
-LEFT JOIN civicrm_activity_assignment aa ON a.id = aa.activity_id
+           {$joinCaseActivity}
+INNER JOIN civicrm_activity_contact ac ON a.id = ac.activity_id
 WHERE      a.id = %1
     ";
       $params = array(1 => array($activityID, 'Integer'));
       $dao = CRM_Core_DAO::executeQuery($query, $params);
 
-      if ($dao->fetch()) {
+      // FIXME HERE TO GET and assign
+      // source_contact_id, assigneeID and targetID to the $dao object
+      $firstDAO = NULL;
+      while ($dao->fetch()) {
+        if ($firstDAO === NULL) {
+          $firstDAO = clone($dao);
+        }
+
+        switch ($dao->record_type) {
+          case 'Source':
+            $firstDAO->source_contact_id = $dao->acContactID;
+            break;
+          case 'Assignee':
+            $firstDAO->assigneeID = $dao->acContactID;
+            break;
+          case 'Target':
+            $firstDAO->targetID = $dao->acContactID;
+            break;
+        }
+      }
+
+      if ($firstDAO) {
         //if activity type is email get info of all activities.
-        if ($dao->activity_type_id == CRM_Core_OptionGroup::getValue('activity_type', 'Email', 'name')) {
+        if ($firstDAO->activity_type_id == CRM_Core_OptionGroup::getValue('activity_type', 'Email', 'name')) {
           $anyActivity = TRUE;
         }
         $activityTypes = $this->allActivityTypes(FALSE, $anyActivity);
         $activityTypeInfo = NULL;
 
-        if (isset($activityTypes[$dao->activity_type_id])) {
-          $activityTypeInfo = $activityTypes[$dao->activity_type_id];
+        if (isset($activityTypes[$firstDAO->activity_type_id])) {
+          $activityTypeInfo = $activityTypes[$firstDAO->activity_type_id];
         }
+
         if ($activityTypeInfo) {
-          $activityInfos[$index] = $this->getActivity($clientID, $dao, $activityTypeInfo);
+          $activityInfos[$index] = $this->getActivity($clientID, $firstDAO, $activityTypeInfo);
         }
       }
     }
@@ -265,7 +286,8 @@ WHERE      a.id = %1
     return $activityInfos[$index];
   }
 
-  function &getActivity($clientID,
+  function &getActivity(
+    $clientID,
     $activityDAO,
     &$activityTypeInfo
   ) {
@@ -487,7 +509,8 @@ WHERE      a.id = %1
     return $activity;
   }
 
-  function getCustomData($clientID,
+  function getCustomData(
+    $clientID,
     $activityDAO,
     &$activityTypeInfo
   ) {
