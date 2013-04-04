@@ -62,6 +62,7 @@
        <name>UI_activity_contact_id</name>
        <fieldName>contact_id</fieldName>
        <fieldName>activity_id</fieldName>
+       <fieldName>record_type</fieldName>
        <unique>true</unique>
        <add>4.4</add>
   </index>
