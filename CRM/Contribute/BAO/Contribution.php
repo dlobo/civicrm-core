@@ -2424,11 +2424,11 @@ WHERE  contribution_id = %1 ";
       $honorIds['contribution'] = $this->id;
       $idParams = array('id' => $honorID, 'contact_id' => $honorID);
       CRM_Contact_BAO_Contact::retrieve($idParams, $honorDefault, $honorIds);
-      $honorType = CRM_Core_PseudoConstant::honor();
+      $honorType = CRM_Core_PseudoConstant::get('CRM_Contribute_DAO_Contribution', 'honor_type_id');
 
       $template->assign('honor_block_is_active', 1);
       if (CRM_Utils_Array::value('prefix_id', $honorDefault)) {
-        $prefix = CRM_Core_PseudoConstant::individualPrefix();
+        $prefix = CRM_Core_PseudoConstant::get('CRM_Contact_DAO_Contact', 'prefix_id');
         $template->assign('honor_prefix', $prefix[$honorDefault['prefix_id']]);
       }
       $template->assign('honor_first_name', CRM_Utils_Array::value('first_name', $honorDefault));

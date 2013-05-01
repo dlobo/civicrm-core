@@ -57,13 +57,6 @@ class CRM_Core_PseudoConstant {
   private static $cache;
 
   /**
-   * location type
-   * @var array
-   * @static
-   */
-  private static $locationType;
-
-  /**
    * location vCard name
    * @var array
    * @static
@@ -99,39 +92,11 @@ class CRM_Core_PseudoConstant {
   private static $component;
 
   /**
-   * individual prefix
-   * @var array
-   * @static
-   */
-  private static $individualPrefix;
-
-  /**
-   * individual suffix
-   * @var array
-   * @static
-   */
-  private static $individualSuffix;
-
-  /**
    * im protocols
    * @var array
    * @static
    */
   private static $imProvider;
-
-  /**
-   * website protocols
-   * @var array
-   * @static
-   */
-  private static $websiteType;
-
-  /**
-   * im protocols
-   * @var array
-   * @static
-   */
-  private static $fromEmailAddress;
 
   /**
    * states, provinces
@@ -267,13 +232,6 @@ class CRM_Core_PseudoConstant {
   private static $worldRegions;
 
   /**
-   * honorType
-   * @var array
-   * @static
-   */
-  private static $honorType;
-
-  /**
    * activity status
    * @var array
    * @static
@@ -281,46 +239,11 @@ class CRM_Core_PseudoConstant {
   private static $activityStatus;
 
   /**
-   * priority
-   * @var array
-   * @static
-   */
-  private static $priority;
-
-  /**
-   * wysiwyg Editor
-   * @var array
-   * @static
-   */
-  private static $wysiwygEditor;
-
-  /**
-   * Mapping Types
-   * @var array
-   * @static
-   */
-  private static $mappingType;
-
-  /**
-   * Phone Types
-   * @var array
-   * @static
-   */
-  private static $phoneType;
-
-  /**
    * Visibility
    * @var array
    * @static
    */
   private static $visibility;
-
-  /**
-   * Mail Protocols
-   * @var array
-   * @static
-   */
-  private static $mailProtocol;
 
   /**
    * Greetings
@@ -404,12 +327,33 @@ class CRM_Core_PseudoConstant {
    * @param String $daoName
    * @param String $fieldName
    * @param Array $params
+   * - name       string  name of the option group
+   * - flip       boolean results are return in id => label format if false
+   *                            if true, the results are reversed
+   * - grouping   boolean if true, return the value in 'grouping' column (currently unsupported for tables other than option_value)
+   * - localize   boolean if true, localize the results before returning
+   * - condition  string  add another condition to the sql query
+   * - labelColumnName string the column to use for 'label'
+   * - onlyActive boolean return only the action option values
+   * - fresh      boolean ignore cache entries and go back to DB
    *
    * @return Array on success, FALSE on error.
-   * 
+   *
    * @static
    */
   public static function get($daoName, $fieldName, $params = array()) {
+    // Merge defaults
+    $params += array(
+      'flip' => FALSE,
+      'grouping' => FALSE,
+      'localize' => FALSE,
+      'condition' => NULL,
+      'labelColumnName' => NULL,
+      'onlyActive' => TRUE,
+      'fresh' => FALSE,
+    );
+    $flip = $params['flip'];
+
     $dao = new $daoName;
     $fields = $dao->fields();
     if (empty($fields[$fieldName])) {
@@ -417,64 +361,82 @@ class CRM_Core_PseudoConstant {
     }
     $fieldSpec = $fields[$fieldName];
 
-    // If the field is an enum, use explode the enum definition and return the array.
+    // If the field is an enum, explode the enum definition and return the array.
     if (array_key_exists('enumValues', $fieldSpec)) {
       // use of a space after the comma is inconsistent in xml
       $enumStr = str_replace(', ', ',', $fieldSpec['enumValues']);
-      return explode(',', $enumStr);
+      $values = explode(',', $enumStr);
+      return $flip ? array_flip($values) : $values;
     }
+
     elseif (!empty($fieldSpec['pseudoconstant'])) {
       $pseudoconstant = $fieldSpec['pseudoconstant'];
       if(!empty($pseudoconstant['optionGroupName'])) {
-        // Translate $params array into function arguments;
-        // populate default function params if not supplied in the array.
-        $ret = CRM_Core_OptionGroup::values(
+        // Call our generic fn for retrieving from the option_value table
+        return CRM_Core_OptionGroup::values(
           $pseudoconstant['optionGroupName'],
-          CRM_Utils_Array::value('flip', $params, FALSE),
-          CRM_Utils_Array::value('grouping', $params, FALSE),
-          CRM_Utils_Array::value('localize', $params, FALSE),
-          CRM_Utils_Array::value('condition', $params, NULL),
-          CRM_Utils_Array::value('labelColumnName', $params, 'label'),
-          CRM_Utils_Array::value('onlyActive', $params, TRUE),
-          CRM_Utils_Array::value('fresh', $params, FALSE)
+          $flip,
+          $params['grouping'],
+          $params['localize'],
+          $params['condition'],
+          $params['labelColumnName'] ? $params['labelColumnName'] : 'label',
+          $params['onlyActive'],
+          $params['fresh']
         );
-        return $ret;
       }
       if (!empty($pseudoconstant['table'])) {
-        // Sort params so the serialized string will be consistent.
+        // Normalize params so the serialized cache string will be consistent.
+        CRM_Utils_Array::remove($params, 'flip', 'fresh');
         ksort($params);
         $cacheKey = "{$daoName}{$fieldName}" . serialize($params);
 
-        if (isset(self::$cache[$cacheKey])) {
+        // Return cached options
+        if (isset(self::$cache[$cacheKey]) && empty($params['fresh'])) {
           return self::$cache[$cacheKey];
         }
 
-        $query = "
-          SELECT
-            %1 AS id, %2 AS label
-          FROM
-            %3
-        ";
-        if (!empty($pseudoconstant['condition'])) {
-          $query .= " WHERE {$pseudoconstant['condition']}";
+        $select = "SELECT %1 AS id, %2 AS label";
+        $from = "FROM %3";
+        $wheres = array();
+        $order = "ORDER BY %2";
+        // Condition param can be passed as an sql string
+        if (!empty($params['condition'])) {
+          $wheres[] = $params['condition'];
         }
-        $query .= " ORDER BY %2";
+        // Support for onlyActive param if option table contains is_active field
+        if (!empty($params['onlyActive'])) {
+          $daoName = CRM_Core_AllCoreTables::getClassForTable($pseudoconstant['table']);
+          $dao = new $daoName;
+          if (in_array('is_active', $dao->fields())) {
+            $wheres[] = 'is_active = 1';
+          }
+          $dao->free();
+        }
+        // Support labelColumnName param
+        $labelColumnName = $params['labelColumnName'] ? $params['labelColumnName'] : $pseudoconstant['labelColumn'];
         $queryParams = array(
            1 => array($pseudoconstant['keyColumn'], 'String', CRM_Core_DAO::QUERY_FORMAT_NO_QUOTES),
-           2 => array($pseudoconstant['labelColumn'], 'String', CRM_Core_DAO::QUERY_FORMAT_NO_QUOTES),
+           2 => array($labelColumnName, 'String', CRM_Core_DAO::QUERY_FORMAT_NO_QUOTES),
            3 => array($pseudoconstant['table'], 'String', CRM_Core_DAO::QUERY_FORMAT_NO_QUOTES),
         );
 
         self::$cache[$cacheKey] = array();
+        $query = "$select $from";
+        if ($wheres) {
+          $query .= " WHERE " . implode($wheres, ' AND ');
+        }
+        $query .= ' ' . $order;
         $dao = CRM_Core_DAO::executeQuery($query, $queryParams);
         while ($dao->fetch()) {
           self::$cache[$cacheKey][$dao->id] = $dao->label;
         }
-        if (CRM_Utils_Array::value('localize', $params)) {
+        $dao->free();
+        if (!empty($params['localize'])) {
           $i18n = CRM_Core_I18n::singleton();
           $i18n->localizeArray(self::$cache[$cacheKey]);
         }
-        return self::$cache[$cacheKey];
+
+        return $flip ? array_flip(self::$cache[$cacheKey]) : self::$cache[$cacheKey];
       }
     }
     // If we're still here, it's an error. Return FALSE.
@@ -557,28 +519,10 @@ class CRM_Core_PseudoConstant {
    * @param boolean $name pseudoconstant to be flushed
    *
    */
-  public static function flush($name) {
-    self::$$name = NULL;
-  }
-
-  /**
-   * Get all location types.
-   *
-   * The static array locationType is returned
-   *
-   * @access public
-   * @static
-   *
-   * @param boolean $all - get All location types - default is to get only active ones.
-   *
-   * @return array - array reference of all location types.
-   *
-   */
-  public static function &locationType($all = FALSE) {
-    if (!self::$locationType) {
-      self::populate(self::$locationType, 'CRM_Core_DAO_LocationType', $all);
+  public static function flush($name = 'cache') {
+    if (property_exists(self, $name)) {
+      self::$$name = NULL;
     }
-    return self::$locationType;
   }
 
   /**
@@ -729,67 +673,6 @@ class CRM_Core_PseudoConstant {
     return self::$component;
   }
 
-
-  /**
-   * Get all Individual Prefix.
-   *
-   * The static array individualPrefix is returned
-   *
-   * @access public
-   * @static
-   *
-   * @param boolean $all - get All Individual Prefix - default is to get only active ones.
-   *
-   * @return array - array reference of all individual prefix.
-   *
-   */
-  public static function &individualPrefix() {
-    if (!self::$individualPrefix) {
-      self::$individualPrefix = CRM_Core_OptionGroup::values('individual_prefix');
-    }
-    return self::$individualPrefix;
-  }
-
-  /**
-   * Get all phone type
-   * The static array phoneType is returned
-   *
-   * @access public
-   * @static
-   *
-   * @param boolean $all - get All phone type - default is to get
-   * only active ones.
-   *
-   * @return array - array reference of all phone types.
-   *
-   */
-  public static function &phoneType() {
-    if (!self::$phoneType) {
-      self::$phoneType = CRM_Core_OptionGroup::values('phone_type');
-    }
-    return self::$phoneType;
-  }
-
-  /**
-   * Get all Individual Suffix.
-   *
-   * The static array individualSuffix is returned
-   *
-   * @access public
-   * @static
-   *
-   * @param boolean $all - get All Individual Suffix - default is to get only active ones.
-   *
-   * @return array - array reference of all individual suffix.
-   *
-   */
-  public static function &individualSuffix() {
-    if (!self::$individualSuffix) {
-      self::$individualSuffix = CRM_Core_OptionGroup::values('individual_suffix');
-    }
-    return self::$individualSuffix;
-  }
-
   /**
    * Get all the IM Providers from database.
    *
@@ -811,71 +694,7 @@ class CRM_Core_PseudoConstant {
     }
     return self::$imProvider;
   }
-
-  /**
-   * Get all the website types from database.
-   *
-   * The static array websiteType is returned, and if it's
-   * called the first time, the <b>Website DAO</b> is used
-   * to get all the Website Types.
-   *
-   * Note: any database errors will be trapped by the DAO.
-   *
-   * @access public
-   * @static
-   *
-   * @return array - array reference of all Website types.
-   *
-   */
-  public static function &websiteType() {
-    if (!self::$websiteType) {
-      self::$websiteType = CRM_Core_OptionGroup::values('website_type');
-    }
-    return self::$websiteType;
-  }
-
-  /**
-   * Get the all From Email Address from database.
-   *
-   * The static array $fromEmailAddress is returned, and if it's
-   * called the first time, DAO is used
-   * to get all the From Email Address
-   *
-   * Note: any database errors will be trapped by the DAO.
-   *
-   * @access public
-   * @static
-   *
-   * @return array - array reference of all From Email Address.
-   */
-  public static function &fromEmailAddress() {
-    if (!self::$fromEmailAddress) {
-      self::$fromEmailAddress = CRM_Core_OptionGroup::values('from_email_address');
-    }
-    return self::$fromEmailAddress;
-  }
-
-  /**
-   * Get the all Mail Protocols from database.
-   *
-   * The static array mailProtocol is returned, and if it's
-   * called the first time, the DAO is used
-   * to get all the Mail Protocol.
-   *
-   * Note: any database errors will be trapped by the DAO.
-   *
-   * @access public
-   * @static
-   *
-   * @return array - array reference of all Mail Protocols.
-   */
-  public static function &mailProtocol() {
-    if (!self::$mailProtocol) {
-      self::$mailProtocol = CRM_Core_OptionGroup::values('mail_protocol');
-    }
-    return self::$mailProtocol;
-  }
-
+ 
   /**
    * Get all the State/Province from database.
    *
@@ -1778,26 +1597,6 @@ WHERE  id = %1";
   }
 
   /**
-   * Get all Honor Type.
-   *
-   * The static array honorType is returned
-   *
-   * @access public
-   * @static
-   *
-   * @param boolean $all - get All Honor Type.
-   *
-   * @return array - array reference of all Honor Types.
-   *
-   */
-  public static function &honor() {
-    if (!self::$honorType) {
-      self::$honorType = CRM_Core_OptionGroup::values('honor_type');
-    }
-    return self::$honorType;
-  }
-
-  /**
    * Get all Activity Statuses.
    *
    * The static array activityStatus is returned
@@ -1821,41 +1620,6 @@ WHERE  id = %1";
   }
 
   /**
-   * Get all Priorities
-   *
-   * The static array Priority is returned
-   *
-   * @access public
-   * @static
-   *
-   * @return array - array reference of all Priority
-   */
-  public static function &priority() {
-    if (!self::$priority) {
-      self::$priority = CRM_Core_OptionGroup::values('priority');
-    }
-
-    return self::$priority;
-  }
-
-  /**
-   * Get all WYSIWYG Editors.
-   *
-   * The static array wysiwygEditor is returned
-   *
-   * @access public
-   * @static
-   *
-   * @return array - array reference of all wysiwygEditors
-   */
-  public static function &wysiwygEditor() {
-    if (!self::$wysiwygEditor) {
-      self::$wysiwygEditor = CRM_Core_OptionGroup::values('wysiwyg_editor');
-    }
-    return self::$wysiwygEditor;
-  }
-
-  /**
    * Get all Visibility levels.
    *
    * The static array visibility is returned
@@ -1876,20 +1640,6 @@ WHERE  id = %1";
   }
 
     return self::$visibility[$column];
-  }
-
-  /**
-   * Get all mapping types
-   *
-   * @return array - array reference of all mapping types
-   * @access public
-   * @static
-   */
-  public static function &mappingTypes() {
-    if (!self::$mappingType) {
-      self::$mappingType = CRM_Core_OptionGroup::values('mapping_type');
-    }
-    return self::$mappingType;
   }
 
   public static function &stateProvinceForCountry($countryID, $field = 'name') {

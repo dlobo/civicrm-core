@@ -913,9 +913,9 @@ class CRM_Core_BAO_UFGroup extends CRM_Core_DAO_UFGroup {
 
     $config = CRM_Core_Config::singleton();
 
-    $locationTypes = CRM_Core_PseudoConstant::locationType();
+    $locationTypes = CRM_Core_PseudoConstant::get('CRM_Core_DAO_Address', 'location_type_id');
     $imProviders   = CRM_Core_PseudoConstant::IMProvider();
-    $websiteTypes  = CRM_Core_PseudoConstant::websiteType();
+    $websiteTypes  = CRM_Core_PseudoConstant::get('CRM_Core_DAO_Website', 'website_type_id');
 
     $multipleFields = array('url');
     $nullIndex = $nullValueIndex = ' ';
@@ -1850,13 +1850,13 @@ AND    ( entity_id IS NULL OR entity_id <= 0 )
     elseif ($fieldName === 'individual_prefix') {
       $form->add('select', $name, $title,
         array(
-          '' => ts('- select -')) + CRM_Core_PseudoConstant::individualPrefix(), $required
+          '' => ts('- select -')) + CRM_Core_PseudoConstant::get('CRM_Contact_DAO_Contact', 'prefix_id'), $required
       );
     }
     elseif ($fieldName === 'individual_suffix') {
       $form->add('select', $name, $title,
         array(
-          '' => ts('- select -')) + CRM_Core_PseudoConstant::individualSuffix(), $required
+          '' => ts('- select -')) + CRM_Core_PseudoConstant::get('CRM_Contact_DAO_Contact', 'suffix_id'), $required
       );
     }
     elseif ($fieldName === 'contact_sub_type') {
@@ -1974,10 +1974,10 @@ AND    ( entity_id IS NULL OR entity_id <= 0 )
         if (substr($name, -1) == ']') {
           $websiteTypeName = substr($name, 0, -1) . '-website_type_id]';
         }
-        $form->addElement('select', $websiteTypeName, NULL, CRM_Core_PseudoConstant::websiteType());
+        $form->addElement('select', $websiteTypeName, NULL, CRM_Core_PseudoConstant::get('CRM_Core_DAO_Website', 'website_type_id'));
       }
       else {
-        $form->addElement('select', $name . '-website_type_id', NULL, CRM_Core_PseudoConstant::websiteType());
+        $form->addElement('select', $name . '-website_type_id', NULL, CRM_Core_PseudoConstant::get('CRM_Core_DAO_Website', 'website_type_id'));
       }
     }
     // Note should be rendered as textarea

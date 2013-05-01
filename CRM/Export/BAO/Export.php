@@ -83,7 +83,7 @@ class CRM_Export_BAO_Export {
     $allCampaigns = array();
     $exportCampaign = FALSE;
 
-    $phoneTypes = CRM_Core_PseudoConstant::phoneType();
+    $phoneTypes = CRM_Core_PseudoConstant::get('CRM_Core_DAO_Phone', 'phone_type_id');
     $imProviders = CRM_Core_PseudoConstant::IMProvider();
     $contactRelationshipTypes = CRM_Contact_BAO_Relationship::getContactRelationshipType(
       NULL,
@@ -127,7 +127,7 @@ class CRM_Export_BAO_Export {
     }
     if ($fields) {
       //construct return properties
-      $locationTypes = CRM_Core_PseudoConstant::locationType();
+      $locationTypes = CRM_Core_PseudoConstant::get('CRM_Core_DAO_Address', 'location_type_id');
       $locationTypeFields = array(
         'street_address',
         'supplemental_address_1',

@@ -309,7 +309,7 @@ class CRM_Profile_Selector_Listings extends CRM_Core_Selector_Base implements CR
         ),
       );
 
-      $locationTypes = CRM_Core_PseudoConstant::locationType();
+      $locationTypes = CRM_Core_PseudoConstant::get('CRM_Core_DAO_Address', 'location_type_id');
 
       foreach ($this->_fields as $name => $field) {
         // skip pseudo fields
@@ -497,7 +497,7 @@ class CRM_Profile_Selector_Listings extends CRM_Core_Selector_Base implements CR
     }
     $links = self::links($this->_map, $this->_editLink, $this->_linkToUF, $this->_profileIds);
 
-    $locationTypes = CRM_Core_PseudoConstant::locationType();
+    $locationTypes = CRM_Core_PseudoConstant::get('CRM_Core_DAO_Address', 'location_type_id');
 
     $names = array();
     static $skipFields = array('group', 'tag');
@@ -569,7 +569,7 @@ class CRM_Profile_Selector_Listings extends CRM_Core_Selector_Base implements CR
     $showProfileOverlay = CRM_Core_BAO_UFGroup::showOverlayProfile();
 
     $imProviders  = CRM_Core_PseudoConstant::IMProvider();
-    $websiteTypes = CRM_Core_PseudoConstant::websiteType();
+    $websiteTypes = CRM_Core_PseudoConstant::get('CRM_Core_DAO_Website', 'website_type_id');
     $languages    = CRM_Core_PseudoConstant::languages();
     while ($result->fetch()) {
       if (isset($result->country)) {
