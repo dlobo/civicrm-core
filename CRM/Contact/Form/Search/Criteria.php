@@ -368,7 +368,7 @@ class CRM_Contact_Form_Search_Criteria {
     }
 
     CRM_Core_BAO_Address::addStateCountryMap($stateCountryMap);
-    
+
     // extend addresses with proximity search
     $form->addElement('text', 'prox_distance', ts('Find contacts within'));
     $form->addElement('select', 'prox_distance_unit', NULL, array('miles' => ts('Miles'), 'kilos' => ts('Kilometers')));
@@ -477,7 +477,7 @@ class CRM_Contact_Form_Search_Criteria {
         array('id' => "civicrm_gender_{$var}_{$key}")
       );
     }
-    $form->addGroup($genderOptions, 'gender', ts('Gender'));
+    $form->addGroup($genderOptions, 'gender_id', ts('Gender'));
 
     CRM_Core_Form_Date::buildDateRange($form, 'birth_date', 1, '_low', '_high', ts('From'), FALSE, FALSE, 'birth');
 
